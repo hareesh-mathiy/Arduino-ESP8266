@@ -3,7 +3,7 @@
 const byte rxPin = 2; // Wire this to Tx Pin of ESP8266
 const byte txPin = 3; // Wire this to Rx Pin of ESP8266
 
-int inPin = 5;         // the number of the input pin
+int inPin = 7;         // the number of the input pin
 int outPin = 13;       // the number of the output pin
 int state = HIGH;      // the current state of the output pin
 int reading;           // the current reading from the input pin
@@ -14,6 +14,9 @@ long debounce = 200;   // the debounce time, increase if the output flickers
 int initialize = 0;
 int responseCount = 0;
 String inData;
+String outData = "off";
+String received;
+int overWrite = 0;
 
 // We'll use a software serial interface to connect to ESP8266
 SoftwareSerial ESP8266 (rxPin, txPin);
@@ -29,12 +32,23 @@ void setup() {
 
 void loop() {
    // read the state of the pushbutton value:
-  reading = digitalRead(inPin);
-
-  if (reading == HIGH && previous == LOW && millis() - time > debounce) {
-    if (state == HIGH) state = LOW;
-    else state = HIGH;
-    time = millis();    
+   if(overWrite == 0){
+      reading = digitalRead(inPin);
+   }
+  if(initialize == 7 || initialize == 0){
+    if (reading == HIGH && previous == LOW && millis() - time > debounce) {
+      if (state == HIGH){
+        state = LOW;
+        outData = "off";
+      }
+      else {
+        state = HIGH;
+        outData = "on";
+      }
+      if(overWrite == 0) initialize = 5;
+      time = millis();   
+      overWrite = 0; 
+    }
   }
   
   digitalWrite(outPin, state);
@@ -103,9 +117,13 @@ void loop() {
     while(responseCount < 20){
       inData = ESP8266.readStringUntil('\n');
       if(inData.length() > 1) Serial.println("--- Got reponse from ESP8266: " + inData);
+       if(inData.indexOf("+IPD") > -1){
+        received = inData;
+        responseCount = 20;
+       }
       if(inData[0] == '>'){
-        Serial.println("test");
-        ESP8266.println("test");
+        Serial.println(outData);
+        ESP8266.println(outData);
       }
       responseCount++;
     }
@@ -114,5 +132,20 @@ void loop() {
   if(initialize == 6){
     Serial.println("Done");
     initialize = 7;
+    if(received.length() > 1) Serial.println("--- Got reponse from server: " + received);
+    if(received.indexOf("on") > -1){
+      overWrite = 1;
+      reading = HIGH;
+       previous = LOW;
+      state = LOW;
+      Serial.println("Turned LED on");
+    }
+    else if(received.indexOf("off") > -1){
+      overWrite = 1;
+      reading = HIGH;
+      previous = LOW;
+      state = HIGH;
+      Serial.println("Turned LED off");
+    }
   }
 }
